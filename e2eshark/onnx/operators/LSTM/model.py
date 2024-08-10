@@ -6,7 +6,7 @@
 import numpy
 import onnxruntime
 from onnx import numpy_helper, TensorProto, save_model
-from onnx.helper import make_model, make_node, make_graph, make_tensor_value_info
+from onnx.helper import make_model, make_node, make_graph, make_tensor_value_info, make_attribute
 from onnx.checker import check_model
 import sys
 
@@ -20,23 +20,23 @@ E2ESHARK_CHECK = dict(E2ESHARK_CHECK_DEF)
 
 
 # Create an input (ValueInfoProto)
-X = make_tensor_value_info("X", TensorProto.FLOAT, [15,1,10])
-initial_h = make_tensor_value_info("initial_h", TensorProto.FLOAT, [1,1,20])
-initial_c = make_tensor_value_info("initial_c", TensorProto.FLOAT, [1,1,20])
+X = make_tensor_value_info("X", TensorProto.FLOAT, [32,32,192])
+initial_h = make_tensor_value_info("initial_h", TensorProto.FLOAT, [2,32,48])
+initial_c = make_tensor_value_info("initial_c", TensorProto.FLOAT, [2,32,48])
 
 # Create tensor value info for W, R, B, sequence_lens
-W = make_tensor_value_info("W", TensorProto.FLOAT, [1, 80, 10])  # [num_directions, 4*hidden_size, input_size]
-R = make_tensor_value_info("R", TensorProto.FLOAT, [1, 80, 20])  # [num_directions, 4*hidden_size, hidden_size]
-B = make_tensor_value_info("B", TensorProto.FLOAT, [1, 160])  # [num_directions, 8*hidden_size]
-sequence_lens = make_tensor_value_info("sequence_lens", TensorProto.INT32, [1])  # [batch_size]
+W = make_tensor_value_info("W", TensorProto.FLOAT, [2,192,192])  # [num_directions, 4*hidden_size, input_size]
+R = make_tensor_value_info("R", TensorProto.FLOAT, [2,192,48])  # [num_directions, 4*hidden_size, hidden_size]
+B = make_tensor_value_info("B", TensorProto.FLOAT, [2,384])  # [num_directions, 8*hidden_size]
+sequence_lens = make_tensor_value_info("sequence_lens", TensorProto.INT32, [32])  # [batch_size]
 
-Y = make_tensor_value_info("Y", TensorProto.FLOAT, [15,1,1,20])
-Y_h = make_tensor_value_info("Y_h", TensorProto.FLOAT, [1,1,20])
-Y_c = make_tensor_value_info("Y_c", TensorProto.FLOAT, [1,1,20])
+Y = make_tensor_value_info("Y", TensorProto.FLOAT, [32,2,32,48])
+Y_h = make_tensor_value_info("Y_h", TensorProto.FLOAT, [2,32,48])
+Y_c = make_tensor_value_info("Y_c", TensorProto.FLOAT, [2,32,48])
 
 
 lstmnode = make_node(
-    hidden_size=20,
+    hidden_size=48,
     op_type="LSTM",
     inputs=[
         "X",  # input tensor
@@ -54,10 +54,13 @@ lstmnode = make_node(
     ]
 )
 
+lstmnode.attribute.append(make_attribute("direction", "bidirectional"))
+
 graph = make_graph(
     [lstmnode],
     "lstm_graph",
     [X, W, R, B, sequence_lens, initial_h, initial_c],
+    # [X, W, R, B, initial_h, initial_c],
     [Y, Y_h, Y_c]
 )
 
@@ -79,13 +82,13 @@ inputs = session.get_inputs()
 outputs = session.get_outputs()
 
 test_input = {
-    "X": numpy.random.randn(15,1,10).astype(numpy.float32), # inputs
-    "W": numpy.random.randn(1, 80, 10).astype(numpy.float32),  # weight tensor for the gates
-    "R": numpy.random.randn(1, 80, 20).astype(numpy.float32),  # recurrence weight tensor
-    "B": numpy.random.randn(1,160).astype(numpy.float32),  # optional bias tensor
-    "sequence_lens": numpy.array([15], dtype=numpy.int32),  # optional tensor specifying lengths of the sequences
-    "initial_h": numpy.zeros((1,1,20)).astype(numpy.float32),  # optional initial value of the hidden
-    "initial_c": numpy.zeros((1,1,20)).astype(numpy.float32),  # optional initial value of the cell
+    "X": numpy.random.randn(32,32,192).astype(numpy.float32), # inputs
+    "W": numpy.random.randn(2,192,192).astype(numpy.float32),  # weight tensor for the gates
+    "R": numpy.random.randn(2,192,48).astype(numpy.float32),  # recurrence weight tensor
+    "B": numpy.random.randn(2,384).astype(numpy.float32),  # optional bias tensor
+    "sequence_lens": numpy.array([32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32], dtype=numpy.int32),  # optional tensor specifying lengths of the sequences
+    "initial_h": numpy.zeros((2,32,48)).astype(numpy.float32),  # optional initial value of the hidden
+    "initial_c": numpy.zeros((2,32,48)).astype(numpy.float32),  # optional initial value of the cell
 }
 
 # test_input and test_output are list of numpy arrays
